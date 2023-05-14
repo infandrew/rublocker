@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>RuBlocker</title>
+        <style>
+            .checkbox-row {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: left;
+                width: 282px;
+            }
+
+            .checkbox-row input[type="checkbox"] {
+                margin-right: 10px;
+            }
+
+            .checkbox-row input[type="text"] {
+                width: 15px;
+            }
+
+            .checkbox-row label {
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+                padding-right: 8px;
+            }
+
+            .checkbox-row h1 {
+                margin: 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="checkbox-row"><h1>The level of Russophobia</h1></div>
+        <div class="checkbox-row">
+            <input type="checkbox" id="checkbox1" name="checkbox1" checked>
+            <label for="checkbox1">Show ru Percent on</label>
+            <input type="text" id="threshold1" value="80">%
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" id="checkbox2" name="checkbox2">
+            <label for="checkbox2">Auto "Not Interested" on</label>
+            <input type="text" id="threshold2" value="99">%
+        </div>
+        <script src="popup.js"></script>
+    </body>
+</html>

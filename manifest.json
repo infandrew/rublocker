@@ -1,0 +1,26 @@
+{
+  "name": "RuBlocker",
+  "description": "Russian content blocker for YouTube",
+  "version": "0.1",
+  "manifest_version": 3,
+  "host_permissions": ["https://da72-195-3-128-14.ngrok-free.app/*"],
+  "action": {
+    "default_icon": {
+      "16": "icon_16.png",
+      "32": "icon_32.png",
+      "48": "icon_48.png",
+      "128": "icon_128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
