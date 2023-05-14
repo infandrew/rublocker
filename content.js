@@ -56,21 +56,6 @@ async function canBeShowed(currentValue) {
   return result;
 }
 
-// let prevUrl = undefined;
-// setInterval(() => {
-//   const currUrl = window.location.href;
-//   if (currUrl != prevUrl) {
-//     prevUrl = currUrl;
-//     console.debug("RuBlocker: URL changed to " + window.location.href);
-
-//     // clean all on url change
-//     var elements = document.querySelectorAll("#ru-blocker-span");
-//     for (var i = 0; i < elements.length; i++) {
-//       elements[i].parentNode.removeChild(elements[i]);
-//     }
-//   }
-// }, 1000);
-
 function extractYoutubeId(youtubeLink) {
   let matches = youtubeLink.match(videoIdPattern);
   if (matches == null || matches.length < 1) {
@@ -95,14 +80,12 @@ function clearInjection(parentElement) {
   }
 }
 
-async function updateInjectedValue(videoId, data) {
-  cache.set(videoId, data);
-
+async function updateInjectedValue(element, data) {
   // ask background for settings
   let canBeShowedResult = await canBeShowed(data.ru);
 
   // verify if injectable exists
-  let injectable = document.querySelector(`[href*="${videoId}"] span#ru-blocker-span`);
+  let injectable = element.querySelector(`span#ru-blocker-span`);
 
   if (canBeShowedResult) {
     if (injectable === null) {
@@ -113,48 +96,59 @@ async function updateInjectedValue(videoId, data) {
           font-size: 40px;
           font-weight: bold;
           color: red;
+          z-index: 1000;
           text-shadow: -1px 0 white, 0 1px white, 1px 0 white, 0 -1px white;
           ">РУСНЯ ${(data.ru * 100).toFixed(2)}%</span>`
       );
     } else {
       injectable.innerHTML = `РУСНЯ ${(data.ru * 100).toFixed(2)}%`;
     }
+  } else {
+    clearInjection(element)
   }
 }
 
+async function processElement(element, youtubeLink) {
+  const videoId = extractYoutubeId(youtubeLink);
+  if (videoId == null) {
+    clearInjection(element);
+    return;
+  }
+
+  try {
+    const data = await cachedBackendRequest(videoId);
+    if (data.ru !== undefined) {
+      console.debug(
+        `RuBlocker: ${videoId} ru:${data.ru} uk:${data.uk} en:${data.en}`
+      );
+      cache.set(videoId, data);
+      await updateInjectedValue(element, data);
+      return;
+    } else if (data.state === "FAIL") {
+      cache.set(videoId, data);
+    } else if (data.queue_size !== undefined) {
+      console.debug("RuBlocker: waiting for queue: " + data.queue_size);
+      if (data.queue_size >= 8) canPerformBackendRequest = false;
+    }
+  } catch (error) {
+    console.warn("RuBlocker: Failed: " + error);
+  }
+  clearInjection(element);
+}
+
 setInterval(async function () {
-  let targets = document.querySelectorAll(".yt-simple-endpoint.ytd-thumbnail[href]");
-  // todo handle main .ytd-watch-flexy
+  let targets = document.querySelectorAll(
+    ".yt-simple-endpoint.ytd-thumbnail[href]"
+  );
+  /* #cinematics.ytd-watch-flexy */
 
   canPerformBackendRequest = true;
+  let element = document.querySelector("#cinematics.ytd-watch-flexy");
+  if (element != null) {
+    await processElement(element, window.location.href);
+  }
   for (i = 0; i < targets.length; i++) {
-    element = targets[i];
-
-    let youtubeLink = element.href;
-
-    const videoId = extractYoutubeId(youtubeLink);
-    if (videoId == null) {
-      clearInjection(element);
-      continue;
-    }
-
-    try {
-      const data = await cachedBackendRequest(videoId);
-      if (data.ru !== undefined) {
-        console.debug(
-          `RuBlocker: ${videoId} ru:${data.ru} uk:${data.uk} en:${data.en}`
-        );
-        await updateInjectedValue(videoId, data);
-        continue;
-      } else if (data.state === "FAIL") {
-        cache.set(videoId, data);
-      } else if (data.state !== undefined) {
-        console.debug("RuBlocker: waiting for queue: " + data.queue_size);
-        canPerformBackendRequest = false;
-      }
-    } catch (error) {
-      console.warn("RuBlocker: Failed: " + error);
-    }
-    clearInjection(element);
+    let element = targets[i];
+    await processElement(element, element.href);
   }
 }, 5000);
