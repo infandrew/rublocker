@@ -1,4 +1,3 @@
-
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === "makeRequest") {
     fetch(request.url)
@@ -11,9 +10,12 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       });
   }
   if (request.action === "getShowThreshold") {
-    chrome.storage.sync.get(["checkbox1", "threshold1"], function (data) {
-      sendResponse({ data: data });
-    })
+    chrome.storage.sync.get(
+      ["checkbox1", "threshold1", "checkbox2", "threshold2"],
+      function (data) {
+        sendResponse({ data: data });
+      }
+    );
   }
   return true;
 });

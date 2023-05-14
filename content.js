@@ -1,8 +1,14 @@
 //const host = "http://127.0.0.1:5000/";
 const host = "https://da72-195-3-128-14.ngrok-free.app/";
 const videoIdPattern = /(?<=v=)[a-zA-Z0-9_-]+/;
+const notInterestedTextMarkers = [
+  "Not interested",
+  "Не цікавить",
+  "Не интересует",
+];
 const cache = new Map();
 var canPerformBackendRequest = true;
+var canTriggerBlock = true;
 
 async function backendRequest(videoId) {
   return new Promise((resolve, reject) => {
@@ -45,6 +51,30 @@ async function canBeShowed(currentValue) {
 
   var result = true;
   if (checkboxValue === false) {
+    result = false;
+  } else if (thresholdValue !== undefined) {
+    if (thresholdValue > currentValue * 100) {
+      result = false;
+    }
+  }
+
+  console.debug(`RuBlocker: canBeShowed returned ${result}`);
+  return result;
+}
+
+async function canBeBlocked(currentValue) {
+  const data = await getShowThreshold();
+  let checkboxValue = data["checkbox2"];
+  let thresholdValue = data["threshold2"];
+
+  console.debug(
+    `RuBlocker: checkbox1:${checkboxValue} threshold1:${thresholdValue} currentValue:${currentValue}`
+  );
+
+  var result = true;
+  if (checkboxValue === undefined || thresholdValue === undefined) {
+    result = false;
+  } else if (checkboxValue === false) {
     result = false;
   } else if (thresholdValue !== undefined) {
     if (thresholdValue > currentValue * 100) {
@@ -104,11 +134,61 @@ async function updateInjectedValue(element, data) {
       injectable.innerHTML = `РУСНЯ ${(data.ru * 100).toFixed(2)}%`;
     }
   } else {
-    clearInjection(element)
+    clearInjection(element);
   }
 }
 
-async function processElement(element, youtubeLink) {
+function isOnScreen(element) {
+  const bounds = element.getBoundingClientRect();
+  return bounds.top < window.innerHeight && bounds.bottom > 0;
+}
+
+async function processAutoBlock(element, data) {
+  // ask background for settings
+  if (!(await canBeBlocked(data.ru))) return;
+
+  // find menu
+  let parent = element.closest(`ytd-compact-video-renderer`);
+  if (parent == null) return;
+
+  // verify dismissed block, maybe video is already blocked
+  let dismissedBlock = parent.querySelector(`#dismissed`);
+  if (dismissedBlock.innerHTML.trim().length !== 0) return;
+
+  // lets find the button with 3 dots (vertical ellipsis)
+  let menuOpenButton = parent.querySelector(
+    "ytd-menu-renderer.ytd-compact-video-renderer yt-icon-button.dropdown-trigger #button"
+  );
+  if (menuOpenButton == null || !isOnScreen(menuOpenButton)) return;
+
+  canTriggerBlock = false;
+  menuOpenButton.click();
+  console.debug("RuBlocker: auto-block menu click");
+
+  setTimeout(function () {
+    // get all popup elements
+    let possibleMenuItems = [
+      ...document.querySelectorAll("ytd-menu-service-item-renderer"),
+    ];
+    // try to find button by text content
+    let notInterestedButton = possibleMenuItems.find((el) =>
+      notInterestedTextMarkers.some((s) => el.textContent.includes(s))
+    );
+    // try to find button by icon
+    if (!notInterestedButton) {
+      notInterestedButton = possibleMenuItems.find(
+        (el) => el.querySelector('svg g path[d*="M18.71"]') !== null
+      );
+    }
+
+    if (notInterestedButton) {
+      notInterestedButton.click();
+      console.debug("RuBlocker: auto-block menu item click");
+    }
+  }, 3);
+}
+
+async function processShow(element, youtubeLink) {
   const videoId = extractYoutubeId(youtubeLink);
   if (videoId == null) {
     clearInjection(element);
@@ -123,6 +203,9 @@ async function processElement(element, youtubeLink) {
       );
       cache.set(videoId, data);
       await updateInjectedValue(element, data);
+      if (canTriggerBlock) {
+        await processAutoBlock(element, data);
+      }
       return;
     } else if (data.state === "FAIL") {
       cache.set(videoId, data);
@@ -137,18 +220,21 @@ async function processElement(element, youtubeLink) {
 }
 
 setInterval(async function () {
+  canPerformBackendRequest = true;
+  canTriggerBlock = true;
+
+  // show injection for main video
+  let element = document.querySelector("#cinematics.ytd-watch-flexy");
+  if (element != null) {
+    await processShow(element, window.location.href);
+  }
+
+  // show injection for child videos
   let targets = document.querySelectorAll(
     ".yt-simple-endpoint.ytd-thumbnail[href]"
   );
-  /* #cinematics.ytd-watch-flexy */
-
-  canPerformBackendRequest = true;
-  let element = document.querySelector("#cinematics.ytd-watch-flexy");
-  if (element != null) {
-    await processElement(element, window.location.href);
-  }
   for (i = 0; i < targets.length; i++) {
     let element = targets[i];
-    await processElement(element, element.href);
+    await processShow(element, element.href);
   }
-}, 5000);
+}, 10000);
