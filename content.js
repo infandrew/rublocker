@@ -1,5 +1,4 @@
-//const host = "http://127.0.0.1:5000/";
-const host = "https://da72-195-3-128-14.ngrok-free.app/";
+const host = "http://16.16.168.124/";
 const videoIdPattern = /(?<=v=)[a-zA-Z0-9_-]+/;
 const notInterestedTextMarkers = [
   "Not interested",
@@ -25,23 +24,20 @@ async function backendRequest(videoId) {
   });
 }
 
-async function getShowThreshold() {
+async function getSettings() {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { action: "getShowThreshold" },
-      function (response) {
-        if (response.error) {
-          reject(response.error);
-        } else {
-          resolve(response.data);
-        }
+    chrome.runtime.sendMessage({ action: "getSettings" }, function (response) {
+      if (response.error) {
+        reject(response.error);
+      } else {
+        resolve(response.data);
       }
-    );
+    });
   });
 }
 
 async function canBeShowed(currentValue) {
-  const data = await getShowThreshold();
+  const data = await getSettings();
   let checkboxValue = data["checkbox1"];
   let thresholdValue = data["threshold1"];
 
@@ -63,7 +59,7 @@ async function canBeShowed(currentValue) {
 }
 
 async function canBeBlocked(currentValue) {
-  const data = await getShowThreshold();
+  const data = await getSettings();
   let checkboxValue = data["checkbox2"];
   let thresholdValue = data["threshold2"];
 
@@ -223,18 +219,21 @@ setInterval(async function () {
   canPerformBackendRequest = true;
   canTriggerBlock = true;
 
-  // show injection for main video
-  let element = document.querySelector("#cinematics.ytd-watch-flexy");
-  if (element != null) {
-    await processShow(element, window.location.href);
-  }
+  let settings = await getSettings();
+  if (settings["checkbox1"] === true || settings["checkbox2"] === true) {
+    // show injection for main video
+    let element = document.querySelector("#cinematics.ytd-watch-flexy");
+    if (element != null) {
+      await processShow(element, window.location.href);
+    }
 
-  // show injection for child videos
-  let targets = document.querySelectorAll(
-    ".yt-simple-endpoint.ytd-thumbnail[href]"
-  );
-  for (i = 0; i < targets.length; i++) {
-    let element = targets[i];
-    await processShow(element, element.href);
+    // show injection for child videos
+    let targets = document.querySelectorAll(
+      ".yt-simple-endpoint.ytd-thumbnail[href]"
+    );
+    for (i = 0; i < targets.length; i++) {
+      let element = targets[i];
+      await processShow(element, element.href);
+    }
   }
 }, 10000);
